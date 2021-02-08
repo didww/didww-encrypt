@@ -1,5 +1,7 @@
 # DIDWW Encrypt
 
+![npm](https://img.shields.io/npm/v/@didww/encrypt)
+
 Encrypts files for DIDWW V3 API in browser.
 
 ## Install
