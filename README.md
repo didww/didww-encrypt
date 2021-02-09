@@ -30,3 +30,5 @@ let encryptedContainer = encryptor.encryptFile(pngFile).then(encrypted => {
     encryptedContainer.toString() // => instance of String in base64 format
 })
 ```
+
+or just load `dist/browser.js` to page and use `window.DidwwEncrypt`.

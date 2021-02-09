@@ -1,0 +1,1 @@
+window.DidwwEncrypt = require('./index')
