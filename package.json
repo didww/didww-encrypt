@@ -4,7 +4,8 @@
   "description": "Encrypt files for DIDWW V3 API",
   "main": "src/index.js",
   "scripts": {
-    "build": "parcel build src/browser.js --target browser --cache-dir tmp/cache",
+    "build": "parcel build src/browser.js --target browser --cache-dir tmp/cache --no-minify",
+    "build_min": "parcel build src/browser.js --target browser --cache-dir tmp/cache --out-file browser.min.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "publish": "npm publish --access=public"
   },
