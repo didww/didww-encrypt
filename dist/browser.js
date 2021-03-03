@@ -135,11 +135,8 @@ var ASYM_ALGO = {
   }
 };
 var URLS = {
-  production: 'https://my.didww.com/public_keys',
-  sandbox: 'https://my-sandbox.didww.com/public_keys',
-  staging: 'https://my-staging.didww.com/public_keys',
-  test: null,
-  local: ''
+  production: 'https://api.didww.com/v3/public_keys',
+  sandbox: 'https://api-sandbox.didww.com/v3/public_keys'
 };
 module.exports = {
   SEPARATOR: SEPARATOR,
@@ -177,8 +174,10 @@ function logError(message) {
 function fetchPublicKeys(url) {
   return fetch(url).then(function (response) {
     return response.json();
-  }).then(function (keys) {
-    return [keys.key_a, keys.key_b];
+  }).then(function (payload) {
+    return payload.data.map(function (res) {
+      return res.attributes.key;
+    });
   });
 }
 
@@ -335,18 +334,27 @@ function encryptRSA(pemPubKey, content) {
 function DidwwEncrypt(options) {
   var _this = this;
 
-  // todo validate options (allow environment, publicKeys)
-  var environment = options.environment;
-  var url = options.url || URLS[environment];
-  var publicKeysUrl = url + '/public_keys';
+  if (!options) options = {};
+  var environment = options.environment || 'sandbox';
+  var publicKeysUrl = options.url || URLS[environment];
   var publicKeys = null;
+  var testPublicKeys = null;
   var fingerprint = null;
 
   if (environment === 'test') {
-    publicKeys = options.publicKeys;
+    testPublicKeys = options.publicKeys;
+
+    if (!testPublicKeys || !testPublicKeys[0] || !testPublicKeys[1]) {
+      throw 'pass publicKeys as an array of 2 public keys';
+    }
+  } else if (!publicKeysUrl) {
+    throw 'pass valid environment or url';
   }
 
   this.getPublicKeys = function () {
+    if (testPublicKeys) return new Promise(function (resolve) {
+      return resolve(testPublicKeys);
+    });
     if (publicKeys) return new Promise(function (resolve) {
       return resolve(publicKeys);
     });
@@ -421,5 +429,5 @@ DidwwEncrypt['ASYM_ALGO'] = ASYM_ALGO; // export default DidwwEncrypt
 module.exports = DidwwEncrypt;
 },{"./constants":"iJA9"}],"hpaf":[function(require,module,exports) {
 window.DidwwEncrypt = require('./index');
-},{"./index":"Focm"}]},{},["hpaf"], null)
+},{"./index":"Focm"}]},{},["hpaf"], null);
 //# sourceMappingURL=/browser.js.map

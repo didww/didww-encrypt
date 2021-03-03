@@ -19,7 +19,9 @@ function logError(message) {
 function fetchPublicKeys(url) {
     return fetch(url)
         .then(response => response.json())
-        .then(keys => [keys.key_a, keys.key_b])
+        .then(
+            payload => payload.data.map(res => res.attributes.key)
+        )
 }
 
 function cryptoFingerprint (text, digestAlgo) {
@@ -163,17 +165,23 @@ function encryptRSA(pemPubKey, content) {
 }
 
 function DidwwEncrypt(options) {
-    // todo validate options (allow environment, publicKeys)
-    let environment = options.environment
-    let url = options.url || URLS[environment]
-    let publicKeysUrl = url + '/public_keys'
+    if (!options) options = {}
+    let environment = options.environment || 'sandbox'
+    let publicKeysUrl = options.url || URLS[environment]
     let publicKeys = null
+    let testPublicKeys = null
     let fingerprint = null
     if (environment === 'test') {
-        publicKeys = options.publicKeys
+        testPublicKeys = options.publicKeys
+        if (!testPublicKeys || !testPublicKeys[0] ||  !testPublicKeys[1]) {
+            throw 'pass publicKeys as an array of 2 public keys'
+        }
+    } else if (!publicKeysUrl) {
+        throw 'pass valid environment or url'
     }
 
     this.getPublicKeys = () => {
+        if (testPublicKeys) return new Promise(resolve => resolve(testPublicKeys))
         if (publicKeys) return new Promise(resolve => resolve(publicKeys))
 
         return fetchPublicKeys(publicKeysUrl)

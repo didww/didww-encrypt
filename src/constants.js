@@ -8,11 +8,8 @@ const ASYM_ALGO = {
     hash: { name: "SHA-256" }
 }
 const URLS = {
-    production: 'https://my.didww.com/public_keys',
-    sandbox: 'https://my-sandbox.didww.com/public_keys',
-    staging: 'https://my-staging.didww.com/public_keys',
-    test: null,
-    local: ''
+    production: 'https://api.didww.com/v3/public_keys',
+    sandbox: 'https://api-sandbox.didww.com/v3/public_keys'
 }
 
 module.exports = {
