@@ -86,3 +86,24 @@ function encrypt (file) {
   return "#{encrypted_rsa_a_base64}:::#{encrypted_rsa_b_base64}:::#{encrypted_aes}"
 }
 ```
+
+## Fingerprint generation
+pseudocode
+```
+# parameter pem - RSA public key in pem format.
+# returns RSA public key as bynary string (remove header/footer and decode from base64).
+function pubkey_pem_to_bin(pem) { ... }
+
+# parameter algo - string algorithm name (SHA1, SHA2, MD5, ...).
+# parameter data - string content for digest.
+# returns digest string for data.
+function digest(algo, data) { ... }
+      
+function fingerprint (public_keys) {
+  pubkey_bin_0 = pubkey_pem_to_bin(public_keys[0])
+  pubkey_bin_1 = pubkey_pem_to_bin(public_keys[1])
+  digest_0 = digest('SHA1', pubkey_bin_0)
+  digest_1 = digest('SHA1', pubkey_bin_1)
+  return "#{digest_0}:::#{digest_1}"
+}
+```
