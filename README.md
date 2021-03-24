@@ -48,7 +48,7 @@ base64_encode(str) { ... }
 
 # parameter size - integer number of bytes.
 # returns array of random bytes.
-generate_random_bytes(size)
+generate_random_bytes(size) { ... }
 
 # parameter size - AES algorithm size (128, 256, 512, ...).
 # parameter mode - AES algorighm mode (ECB, CBC, CFP, ...).
@@ -57,20 +57,20 @@ generate_random_bytes(size)
 # parameter data - string that we want to encrypt.
 # returns encrypted binary string.
 # https://tools.ietf.org/html/rfc3602
-encrypt_aes(size, mode, key, iv, data)
+encrypt_aes(size, mode, key, iv, data) { ... }
 
 # parameter bytes - array of bytes.
 # returns converted bytes array to hex string, each byte represents by 2 chars.
-bytes_to_hex(bytes)
+bytes_to_hex(bytes) { ... }
 
 # parameter digest - digest mode used for OAEP padding (SHA128, SHA256, SHA512, ...).
 # parameter label - label string used for OAEP padding.
 # parameter data - string that we want to encrypt.
 # returns encrypted binary string by RSA algorithm with OAEP padding.
 # https://tools.ietf.org/html/rfc8017
-encrypt_rsa_oeap(digest, label, public_key, data)
+encrypt_rsa_oeap(digest, label, public_key, data) { ... }
 
-function encrypt (file) {
+function encrypt (file, public_keys) {
   binary = file_binary_content(file)
   binary_base64 = base64_encode(binary)
   aes_key = generate_random_bytes(32)
