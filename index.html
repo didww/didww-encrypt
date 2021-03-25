@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Encrypt file</title>
+    <link
+            rel="stylesheet"
+            href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+            integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+            crossorigin="anonymous"
+    >
+</head>
+<body>
+
+<div class="card m-5">
+    <div class="card-header">Encrypt file</div>
+    <div class="card-body">
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encryption-fingerprint">Fingerprint</label>
+            <input
+                    type="text"
+                    readonly
+                    id="encryption-fingerprint"
+                    class="form-control col-md-8 mr-2"
+            >
+            <button
+                    class="btn btn-secondary form-control col-md-1"
+                    id="encryption-fingerprint-copy-btn"
+            >
+                Copy
+            </button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encrypt-file">Files</label>
+            <input
+                    type="file"
+                    multiple
+                    id="encrypt-file"
+                    class="encrypted-file-input form-control-file col-md-8 mr-2"
+            >
+            <button class="btn btn-secondary form-control col-md-1" id="encrypt-file-clear-btn">Clear</button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encrypt-file">Files Status</label>
+            <span id="encrypt-file-status" class="col-md-8">Empty</span>
+        </div>
+        <div class="form-group" id="encrypted-download-link">
+        </div>
+    </div>
+</div>
+
+<script
+        src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"
+></script>
+<script
+        src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"
+></script>
+<script
+        src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"
+></script>
+<script src="https://unpkg.com/@didww/encrypt@1.3.0/dist/browser.min.js"></script>
+<script>
+    function readFile(file, onLoad, onError) {
+        if (!onError) onError = function (error) {
+            console.error(error)
+        }
+
+        const reader = new FileReader()
+        reader.onload = function () {
+            onLoad(reader.result)
+        }
+        reader.onerror = function () {
+            onError(reader.error)
+        }
+        reader.readAsDataURL(file)
+        return reader
+    }
+
+    function isReadersReady(readers) {
+        let done = 0
+        readers.forEach(function (reader) {
+            if (reader.readyState === FileReader.DONE) done += 1
+        })
+        return readers.length === done
+    }
+
+    function abortReaders(readers) {
+        fileReaders.forEach(function (reader) {
+            if (reader.readyState !== FileReader.DONE) reader.abort()
+        })
+    }
+
+    function buildDownloadLink(file, filename) {
+        const blobUrl = URL.createObjectURL(file)
+        return $('<a>', { download: filename, href: blobUrl })
+            .text('Download ' + filename)
+            .css({ display: 'block' })
+    }
+
+    const fileInput = $('#encrypt-file')
+    const fingerprintInput = $('#encryption-fingerprint')
+    const downloadLinksContainer = $('#encrypted-download-link')
+    const statusNode = $('#encrypt-file-status')
+    const copyFingerprintBtn = $('#encryption-fingerprint-copy-btn')
+    const clearFilesBtn = $('#encrypt-file-clear-btn')
+    let fileReaders = []
+    const encryptor = new DidwwEncrypt({
+        url: 'https://staging-api.didww.com/v3/public_keys'
+    })
+
+    encryptor.getFingerprint().then(function (fingerprint) {
+        fingerprintInput.val(fingerprint)
+    })
+
+    fileInput.on('change', function () {
+        downloadLinksContainer.html('')
+        const files = fileInput[0].files
+
+        if (files.length === 0) {
+            statusNode.text('Empty')
+            return
+        }
+
+        statusNode.text('Encrypting...')
+        abortReaders(fileReaders)
+        fileReaders = []
+        Array.from(fileInput[0].files).forEach(function (file) {
+            const reader = readFile(file, function (binary) {
+                encryptor.encryptContent(binary).then(function (encrypted) {
+                    const encryptedFile = encrypted.toFile()
+                    const link = buildDownloadLink(encryptedFile, file.name + '.enc')
+                    downloadLinksContainer.append(link)
+                    if (isReadersReady(fileReaders)) statusNode.text('Encrypted.')
+                })
+            })
+            fileReaders.push(reader)
+        })
+    })
+
+    copyFingerprintBtn.on('click', function () {
+        fingerprintInput[0].select()
+        document.execCommand('copy')
+        copyFingerprintBtn.text('Copied').attr('disabled', 'disabled')
+        setTimeout(function () {
+            copyFingerprintBtn.text('Copy').removeAttr('disabled')
+        }, 200)
+    })
+
+    clearFilesBtn.on('click', function () {
+        fileInput.val('')
+        fileInput.trigger('change')
+    })
+</script>
+</body>
+</html>
