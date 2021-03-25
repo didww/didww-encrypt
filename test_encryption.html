@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>Encrypt file</title>
+    <link
+            rel="stylesheet"
+            href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+            integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+            crossorigin="anonymous"
+    >
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="https://github.com/didww/didww-encrypt">DIDWW Encrypt</a>
+
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+        <ul class="navbar-nav mr-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="/">Encrypt file</a>
+            </li>
+            <li class="nav-item active">
+                <a class="nav-link">Test Encryption</a>
+            </li>
+        </ul>
+    </div>
+</nav>
+
+<div class="card m-5">
+    <div class="card-header">Test Encryption</div>
+    <div class="card-body">
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="public-key-a">Public Key A</label>
+            <textarea
+                    id="public-key-a"
+                    rows="15"
+                    class="form-control col-md-8 mr-2"
+                    readonly
+            ></textarea>
+            <button
+                    class="btn btn-secondary form-control col-md-1 copy-btn"
+                    data-target="#public-key-a"
+            >
+                Copy
+            </button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="public-key-b">Public Key B</label>
+            <textarea
+                    id="public-key-b"
+                    rows="15"
+                    class="form-control col-md-8 mr-2"
+                    readonly
+            ></textarea>
+            <button
+                    class="btn btn-secondary form-control col-md-1 copy-btn"
+                    data-target="#public-key-b"
+            >
+                Copy
+            </button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encryption-fingerprint">Fingerprint</label>
+            <input
+                    type="text"
+                    readonly
+                    id="encryption-fingerprint"
+                    class="form-control col-md-8 mr-2"
+            >
+            <button
+                    class="btn btn-secondary form-control col-md-1"
+                    id="encryption-fingerprint-copy-btn"
+            >
+                Copy
+            </button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encrypt-file">Files</label>
+            <input
+                    type="file"
+                    multiple
+                    id="encrypt-file"
+                    class="form-control-file col-md-8 mr-2"
+            >
+            <button class="btn btn-secondary form-control col-md-1 clear-btn" data-target="#encrypt-file">Clear</button>
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encrypt-file">Files Status</label>
+            <span id="encrypt-file-status" class="col-md-8">Empty</span>
+        </div>
+
+        <div class="form-group" id="encrypted-download-link">
+        </div>
+
+        <div class="form-group row">
+            <label class="control-label col-md-2" for="encrypt-file">File To Decrypt</label>
+            <input
+                    type="file"
+                    id="decrypt-file"
+                    class="form-control-file col-md-8 mr-2"
+            >
+            <button class="btn btn-secondary form-control col-md-1 clear-btn" data-target="#decrypt-file">Clear</button>
+        </div>
+        <div class="form-group" id="decrypted-download-link">
+        </div>
+    </div>
+</div>
+
+<script
+        src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"
+></script>
+<script
+        src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"
+></script>
+<script
+        src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"
+></script>
+<script src="https://unpkg.com/@didww/encrypt@1.3.0/dist/browser.min.js"></script>
+<script>
+    function readFile(file, onLoad, onError) {
+        if (!onError) onError = function (error) {
+            console.error(error)
+        }
+
+        const reader = new FileReader()
+        reader.onload = function () {
+            onLoad(reader.result)
+        }
+        reader.onerror = function () {
+            onError(reader.error)
+        }
+        reader.readAsDataURL(file)
+        return reader
+    }
+
+    function dataURItoBinary(dataURI) {
+        return atob(dataURI.split(',')[1])
+    }
+
+    function dataURItoBuffer(dataURI) {
+        const byteString = dataURItoBinary(dataURI)
+        let ab = new ArrayBuffer(byteString.length)
+        let ia = new Uint8Array(ab)
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i)
+        }
+        return ab
+    }
+
+    function dataURItoMimeString(dataURI) {
+        return dataURI.split(',')[0].split(':')[1].split(';')[0]
+    }
+
+    function buildDownloadLink(file, filename) {
+        const blobUrl = URL.createObjectURL(file)
+        return $('<a>', { download: filename, href: blobUrl })
+            .text('Download ' + filename)
+            .css({ display: 'block' })
+    }
+
+    function generateRSAKey() {
+        return crypto.subtle.generateKey(
+            {
+                name: "RSA-OAEP",
+                modulusLength: 4096,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                extractable: false,
+                hash: {
+                    name: "SHA-256"
+                }
+            },
+            true,
+            ["encrypt", "decrypt"]
+        )
+    }
+
+    function convertBinaryToPem(binaryData, label) {
+        const base64Cert = btoa(arrayBufferToString(binaryData))
+        let pemCert = "-----BEGIN " + label + "-----\r\n"
+        let nextIndex = 0
+        while (nextIndex < base64Cert.length) {
+            if (nextIndex + 64 <= base64Cert.length) {
+                pemCert += base64Cert.substr(nextIndex, 64) + "\r\n"
+            } else {
+                pemCert += base64Cert.substr(nextIndex) + "\r\n"
+            }
+            nextIndex += 64
+        }
+        pemCert += "-----END " + label + "-----\r\n"
+        return pemCert
+    }
+
+    function cryptoKeyToPublicPemKey(publicKey) {
+        return window.crypto.subtle.exportKey('spki', publicKey)
+            .then(function (spki) {
+                return convertBinaryToPem(spki, "RSA PUBLIC KEY")
+            })
+    }
+
+    function stringToArrayBuffer(str) {
+        var buf = new ArrayBuffer(str.length);
+        var bufView = new Uint8Array(buf);
+        for (var i = 0, strLen = str.length; i < strLen; i++) {
+            bufView[i] = str.charCodeAt(i);
+        }
+        return buf;
+    }
+
+    function arrayBufferToString(buf) {
+        var bytes = new Uint8Array(buf);
+        return bytes.reduce(function (str, byte) {
+            return str + String.fromCharCode(byte);
+        }, "");
+    }
+
+    function hexStringToArrayBuffer(hexString) {
+        var hexArray = hexString.match(/.{1,2}/g);
+        var intArray = hexArray.map(function (byte) {
+            return parseInt(byte, 16);
+        });
+        return new Uint8Array(intArray).buffer;
+    }
+
+    function decryptRSA(privateKey, content) {
+        return crypto.subtle.decrypt(
+            {
+                name: "RSA-OAEP",
+                label: new Uint8Array([])
+            },
+            privateKey,
+            stringToArrayBuffer(atob(content))
+        ).then(function (decryptedBuf) {
+            return arrayBufferToString(decryptedBuf);
+        }).catch(function (error) {
+            console.error('decryptRSA')
+            console.error(error)
+            throw error
+        })
+    }
+
+    const buildFile = (content, name, type) => {
+        // Edge browser does not support File
+        if (window && window.navigator && window.navigator.msSaveBlob) {
+            let file = new Blob([content], { type: type });
+            file.lastModifiedDate = new Date();
+            file.name = name;
+            return file;
+        }
+
+        return new File([content], name, { type: type, lastModified: new Date() })
+    }
+
+    function decryptAES(key, iv, content) {
+        const keyBuffer = hexStringToArrayBuffer(key)
+        const ivBuffer = hexStringToArrayBuffer(iv)
+        // first 16 bytes is salt.
+        const encryptedText = stringToArrayBuffer(atob(content)).slice(16)
+
+        return crypto.subtle.importKey(
+            "raw",
+            keyBuffer,
+            { name: "AES-CBC" },
+            false,
+            ["encrypt", "decrypt"]
+        ).then(function (cryptoKey) {
+            return crypto.subtle.decrypt(
+                { name: "AES-CBC", iv: ivBuffer },
+                cryptoKey,
+                encryptedText
+            ).then(function (decryptedBuf) {
+                return arrayBufferToString(decryptedBuf);
+            })
+        }).catch(function (error) {
+            console.error('decryptAES')
+            console.error(error)
+            throw error
+        })
+    }
+
+    function decryptFile(binary) {
+        const fileParts = binary.split(':::')
+        const encryptedAesKey = fileParts[0]
+        const encryptedContent = fileParts[2]
+        return decryptRSA(cryptoKeyA.privateKey, encryptedAesKey).then(function (aesKey) {
+            const aesKeyParts = aesKey.split(':::')
+            const key = aesKeyParts[0]
+            const iv = aesKeyParts[1]
+            return decryptAES(key, iv, encryptedContent)
+        }).then(function (decryptedDataUrl) {
+            const mimeString = dataURItoMimeString(decryptedDataUrl)
+            const decryptedBuffer = dataURItoBuffer(decryptedDataUrl)
+            return fetch('https://cdn.jsdelivr.net/gh/jshttp/mime-db@master/db.json')
+                .then(function(resp){
+                    return resp.json()
+                }).then(function (json) {
+                    let filename = 'decrypted'
+                    if (json && json[mimeString]) filename = 'decrypted.' + json[mimeString].extensions[0]
+                    // console.log(json, json[mimeString].extensions[0])
+                    return buildFile(decryptedBuffer, filename, mimeString)
+                })
+        })
+    }
+
+    function buildEncryptor() {
+        if (encryptor) return
+        if (!publicKeyAInput.val() || !publicKeyBInput.val()) return
+
+        encryptor = new DidwwEncrypt({
+            environment: 'test',
+            publicKeys: [publicKeyAInput.val(), publicKeyBInput.val()]
+        })
+        encryptor.getFingerprint().then(function (fingerprint) {
+            fingerprintInput.val(fingerprint)
+        })
+    }
+
+    const fileInput = $('#encrypt-file')
+    const fileToDecryptInput = $('#decrypt-file')
+    const fingerprintInput = $('#encryption-fingerprint')
+    const downloadLinksContainer = $('#encrypted-download-link')
+    const decryptedContainer = $('#decrypted-download-link')
+    const statusNode = $('#encrypt-file-status')
+    const publicKeyAInput = $('#public-key-a')
+    const publicKeyBInput = $('#public-key-b')
+
+    let fileReader = null
+    let encryptor = null
+    let cryptoKeyA = null
+    let cryptoKeyB = null
+    let decryptReader = null
+
+    // Chromium has issues with importing RSA private keys from PEM,
+    // so we generate private keys during page load.
+    generateRSAKey().then(function (value) {
+        cryptoKeyA = value
+        cryptoKeyToPublicPemKey(cryptoKeyA.publicKey).then(function (pem) {
+            publicKeyAInput.val(pem)
+            buildEncryptor()
+        })
+    })
+    generateRSAKey().then(function (value) {
+        cryptoKeyB = value
+        cryptoKeyToPublicPemKey(cryptoKeyB.publicKey).then(function (pem) {
+            publicKeyBInput.val(pem)
+            buildEncryptor()
+        })
+    })
+
+    fileInput.on('change', function () {
+        downloadLinksContainer.html('')
+        const file = fileInput[0].files[0]
+
+        if (!file) {
+            statusNode.text('Empty')
+            return
+        }
+
+        statusNode.text('Encrypting...')
+        if (fileReader) fileReader.abort()
+        fileReader = readFile(file, function (binary) {
+            encryptor.encryptContent(binary).then(function (encrypted) {
+                const encryptedFile = encrypted.toFile()
+                const link = buildDownloadLink(encryptedFile, file.name + '.testenc')
+                downloadLinksContainer.append(link)
+                statusNode.text('Encrypted.')
+            })
+        })
+    })
+
+    fileToDecryptInput.on('change', function () {
+        decryptedContainer.html('')
+
+        if (decryptReader) decryptReader.abort()
+
+        const file = fileToDecryptInput[0].files[0]
+        decryptReader = readFile(file, function (dataUrl) {
+            const binary = dataURItoBinary(dataUrl)
+            decryptFile(binary).then(function (decryptedFile) {
+                const link = buildDownloadLink(decryptedFile, decryptedFile.name)
+                decryptedContainer.append(link)
+            })
+        })
+    })
+
+    $('.copy-btn').on('click', function (event) {
+        const btn = $(event.target)
+        const targetSelector = btn.data('target')
+        if (!targetSelector) return
+
+        const target = $(targetSelector)
+        target[0].select()
+        document.execCommand('copy')
+        btn.text('Copied').attr('disabled', 'disabled')
+        setTimeout(function () {
+            btn.text('Copy').removeAttr('disabled')
+        }, 200)
+    })
+
+    $('.clear-btn').on('click', function (event) {
+        const btn = $(event.target)
+        const targetSelector = btn.data('target')
+        if (!targetSelector) return
+
+        const target = $(targetSelector)
+        target.val('')
+        target.trigger('change')
+    })
+</script>
+</body>
+</html>
