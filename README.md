@@ -8,6 +8,10 @@ Encrypts files for DIDWW V3 API in browser.
 
 npm install @didww/encrypt
 
+## Encryption demo
+
+https://didww.github.io/didww-encrypt/
+
 ## Usage
 
 ```js
