@@ -954,17 +954,21 @@ var _require = require('./constants'),
     ASYM_ALGO = _require.ASYM_ALGO,
     URLS = _require.URLS;
 
-function DidwwEncryptedFile(content) {
+function DidwwEncryptedFile(buffer) {
   this.toString = function () {
-    return content;
+    return arrayBufferToString(buffer);
+  };
+
+  this.toBase64String = function () {
+    return btoa(arrayBufferToString(buffer));
   };
 
   this.toFile = function (name) {
-    return buildFile(content, name || 'file.enc', 'text/plain');
+    return buildFile(buffer, name || 'file.enc', 'text/plain');
   };
 
   this.toArrayBuffer = function () {
-    return stringToArrayBuffer(content);
+    return buffer;
   };
 }
 
@@ -977,32 +981,32 @@ function fetchPublicKeys(_x) {
 }
 
 function _fetchPublicKeys() {
-  _fetchPublicKeys = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee4(url) {
+  _fetchPublicKeys = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee5(url) {
     var response, payload;
-    return _regenerator.default.wrap(function _callee4$(_context4) {
+    return _regenerator.default.wrap(function _callee5$(_context5) {
       while (1) {
-        switch (_context4.prev = _context4.next) {
+        switch (_context5.prev = _context5.next) {
           case 0:
-            _context4.next = 2;
+            _context5.next = 2;
             return fetch(url);
 
           case 2:
-            response = _context4.sent;
-            _context4.next = 5;
+            response = _context5.sent;
+            _context5.next = 5;
             return response.json();
 
           case 5:
-            payload = _context4.sent;
-            return _context4.abrupt("return", payload.data.map(function (res) {
+            payload = _context5.sent;
+            return _context5.abrupt("return", payload.data.map(function (res) {
               return res.attributes.key;
             }));
 
           case 7:
           case "end":
-            return _context4.stop();
+            return _context5.stop();
         }
       }
-    }, _callee4);
+    }, _callee5);
   }));
   return _fetchPublicKeys.apply(this, arguments);
 }
@@ -1020,33 +1024,33 @@ function calculateFingerprint(_x2) {
 }
 
 function _calculateFingerprint() {
-  _calculateFingerprint = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee5(pemPublicKeys) {
+  _calculateFingerprint = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee6(pemPublicKeys) {
     var publicKeysBase64;
-    return _regenerator.default.wrap(function _callee5$(_context5) {
+    return _regenerator.default.wrap(function _callee6$(_context6) {
       while (1) {
-        switch (_context5.prev = _context5.next) {
+        switch (_context6.prev = _context6.next) {
           case 0:
             publicKeysBase64 = pemPublicKeys.map(function (pemPubKey) {
-              return PemToBase64Key(pemPubKey);
+              return pemToBase64Key(pemPubKey);
             });
-            _context5.next = 3;
+            _context6.next = 3;
             return cryptoFingerprint(atob(publicKeysBase64[0]), FINGERPRINT_ALGO);
 
           case 3:
-            _context5.t0 = _context5.sent;
-            _context5.next = 6;
+            _context6.t0 = _context6.sent;
+            _context6.next = 6;
             return cryptoFingerprint(atob(publicKeysBase64[1]), FINGERPRINT_ALGO);
 
           case 6:
-            _context5.t1 = _context5.sent;
-            return _context5.abrupt("return", [_context5.t0, _context5.t1].join(SEPARATOR));
+            _context6.t1 = _context6.sent;
+            return _context6.abrupt("return", [_context6.t0, _context6.t1].join(SEPARATOR));
 
           case 8:
           case "end":
-            return _context5.stop();
+            return _context6.stop();
         }
       }
-    }, _callee5);
+    }, _callee6);
   }));
   return _calculateFingerprint.apply(this, arguments);
 }
@@ -1062,11 +1066,18 @@ function stringToArrayBuffer(str) {
   return buf;
 }
 
-function hexStringToArrayBuffer(hexString) {
-  var intArray = hexString.match(/.{1,2}/g).map(function (byte) {
-    return parseInt(byte, 16);
+function concatArrayBuffers(buffers) {
+  if (buffers.length === 1) return buffers[0];
+  var size = 0;
+  buffers.forEach(function (b) {
+    return size += b.byteLength;
   });
-  return new Uint8Array(intArray).buffer;
+  var result = new Uint8Array(size);
+  buffers.forEach(function (buffer, index) {
+    var offset = index === 0 ? 0 : buffers[index - 1].byteLength;
+    result.set(new Uint8Array(buffer), offset);
+  });
+  return result.buffer;
 }
 
 function arrayBufferToString(buf) {
@@ -1089,10 +1100,10 @@ function arrayBufferToHexString(buf) {
   }, "");
 }
 
-function buildFile(content, name, type) {
+function buildFile(buffer, name, type) {
   // Edge browser does not support File
   if (window && window.navigator && window.navigator.msSaveBlob) {
-    var file = new Blob([content], {
+    var file = new Blob([buffer], {
       type: type
     });
     file.lastModifiedDate = new Date();
@@ -1100,7 +1111,7 @@ function buildFile(content, name, type) {
     return file;
   }
 
-  return new File([content], name, {
+  return new File([buffer], name, {
     type: type,
     lastModified: new Date()
   });
@@ -1118,8 +1129,15 @@ function readFileContent(file) {
       return reject(reader.error);
     };
 
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
   });
+}
+
+function pemToBase64Key(pubKeyPem) {
+  // pemPubKey should look like this
+  // "-----BEGIN PUBLIC KEY-----\n<pubKeyBase64>\n-----END PUBLIC KEY-----\n"
+  if (pubKeyPem[pubKeyPem.length - 1] !== "\n") pubKeyPem = pubKeyPem + "\n";
+  return pubKeyPem.split("\n").slice(1, -2).join("");
 }
 
 function generateKey() {
@@ -1127,158 +1145,155 @@ function generateKey() {
 }
 
 function _generateKey() {
-  _generateKey = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee6() {
-    var cryptoKey, keyBuffer;
-    return _regenerator.default.wrap(function _callee6$(_context6) {
-      while (1) {
-        switch (_context6.prev = _context6.next) {
-          case 0:
-            _context6.next = 2;
-            return crypto.subtle.generateKey(SYM_ALGO, true, ["encrypt", "decrypt"]);
-
-          case 2:
-            cryptoKey = _context6.sent;
-            _context6.next = 5;
-            return crypto.subtle.exportKey("raw", cryptoKey);
-
-          case 5:
-            keyBuffer = _context6.sent;
-            return _context6.abrupt("return", arrayBufferToHexString(keyBuffer));
-
-          case 7:
-          case "end":
-            return _context6.stop();
-        }
-      }
-    }, _callee6);
-  }));
-  return _generateKey.apply(this, arguments);
-}
-
-function encryptAES(_x3, _x4) {
-  return _encryptAES.apply(this, arguments);
-}
-
-function _encryptAES() {
-  _encryptAES = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee7(key, content) {
-    var keyBuffer, ivBufView, salt, cryptoKey, encryptedBuffer, encryptedContent, aesKey;
+  _generateKey = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee7() {
+    var cryptoKey;
     return _regenerator.default.wrap(function _callee7$(_context7) {
       while (1) {
         switch (_context7.prev = _context7.next) {
           case 0:
-            keyBuffer = hexStringToArrayBuffer(key);
-            ivBufView = crypto.getRandomValues(new Uint8Array(16));
-            salt = '0'.repeat(16);
-            cryptoKey = null;
-            _context7.prev = 4;
-            _context7.next = 7;
-            return crypto.subtle.importKey("raw", keyBuffer, {
-              name: SYM_ALGO.name
-            }, false, ["encrypt", "decrypt"]);
+            _context7.next = 2;
+            return crypto.subtle.generateKey(SYM_ALGO, true, ["encrypt", "decrypt"]);
 
-          case 7:
+          case 2:
             cryptoKey = _context7.sent;
-            _context7.next = 14;
-            break;
+            _context7.next = 5;
+            return crypto.subtle.exportKey("raw", cryptoKey);
 
-          case 10:
-            _context7.prev = 10;
-            _context7.t0 = _context7["catch"](4);
-            logError('Exception during import AES key', _context7.t0);
-            return _context7.abrupt("return", null);
+          case 5:
+            return _context7.abrupt("return", _context7.sent);
 
-          case 14:
-            _context7.prev = 14;
-            _context7.next = 17;
-            return crypto.subtle.encrypt({
-              name: SYM_ALGO.name,
-              iv: ivBufView
-            }, cryptoKey, stringToArrayBuffer(content));
-
-          case 17:
-            encryptedBuffer = _context7.sent;
-            encryptedContent = btoa(salt + arrayBufferToString(encryptedBuffer));
-            aesKey = [key, arrayBufferToHexString(ivBufView.buffer)].join(SEPARATOR);
-            return _context7.abrupt("return", {
-              key: aesKey,
-              content: encryptedContent
-            });
-
-          case 23:
-            _context7.prev = 23;
-            _context7.t1 = _context7["catch"](14);
-            logError('Exception during encrypt AES', _context7.t1);
-            return _context7.abrupt("return", null);
-
-          case 27:
+          case 6:
           case "end":
             return _context7.stop();
         }
       }
-    }, _callee7, null, [[4, 10], [14, 23]]);
+    }, _callee7);
   }));
+  return _generateKey.apply(this, arguments);
+}
+
+function generateRandomArrayBuffer(size) {
+  return crypto.getRandomValues(new Uint8Array(size)).buffer;
+}
+
+function encryptAES(_x3) {
   return _encryptAES.apply(this, arguments);
 }
 
-function PemToBase64Key(pemPubKey) {
-  // pemPubKey should look like this
-  // "-----BEGIN PUBLIC KEY-----\n<pubKeyBase64>\n-----END PUBLIC KEY-----\n"
-  if (pemPubKey[pemPubKey.length - 1] !== "\n") pemPubKey = pemPubKey + "\n";
-  return pemPubKey.split("\n").slice(1, -2).join("");
-}
-
-function encryptRSA(_x5, _x6) {
-  return _encryptRSA.apply(this, arguments);
-}
-
-function _encryptRSA() {
-  _encryptRSA = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee8(pemPubKey, content) {
-    var pubKeyBase64, cryptoKey, encryptedBuffer;
+function _encryptAES() {
+  _encryptAES = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee8(dataBuffer) {
+    var keyBuffer, ivBuffer, cryptoKey, encryptedBuffer;
     return _regenerator.default.wrap(function _callee8$(_context8) {
       while (1) {
         switch (_context8.prev = _context8.next) {
           case 0:
-            pubKeyBase64 = PemToBase64Key(pemPubKey);
-            cryptoKey = null;
-            _context8.prev = 2;
-            _context8.next = 5;
-            return crypto.subtle.importKey("spki", stringToArrayBuffer(atob(pubKeyBase64)), ASYM_ALGO, false, ["encrypt"]);
+            _context8.next = 2;
+            return generateKey();
 
-          case 5:
-            cryptoKey = _context8.sent;
-            _context8.next = 12;
-            break;
+          case 2:
+            keyBuffer = _context8.sent;
+            ivBuffer = generateRandomArrayBuffer(16);
+            cryptoKey = null;
+            _context8.prev = 5;
+            _context8.next = 8;
+            return crypto.subtle.importKey("raw", keyBuffer, {
+              name: SYM_ALGO.name
+            }, false, ["encrypt", "decrypt"]);
 
           case 8:
-            _context8.prev = 8;
-            _context8.t0 = _context8["catch"](2);
-            logError("Failed to import RSA pubKey", _context8.t0);
-            return _context8.abrupt("return", null);
-
-          case 12:
-            _context8.prev = 12;
+            cryptoKey = _context8.sent;
             _context8.next = 15;
-            return crypto.subtle.encrypt({
-              name: ASYM_ALGO.name,
-              hash: ASYM_ALGO.hash
-            }, cryptoKey, stringToArrayBuffer(content));
+            break;
+
+          case 11:
+            _context8.prev = 11;
+            _context8.t0 = _context8["catch"](5);
+            logError('Exception during import AES key', _context8.t0);
+            return _context8.abrupt("return", null);
 
           case 15:
-            encryptedBuffer = _context8.sent;
-            return _context8.abrupt("return", btoa(arrayBufferToString(encryptedBuffer)));
+            _context8.prev = 15;
+            _context8.next = 18;
+            return crypto.subtle.encrypt({
+              name: SYM_ALGO.name,
+              iv: ivBuffer
+            }, cryptoKey, dataBuffer);
 
-          case 19:
-            _context8.prev = 19;
-            _context8.t1 = _context8["catch"](12);
-            logError("Failed to encrypt RSA", _context8.t1);
+          case 18:
+            encryptedBuffer = _context8.sent;
+            return _context8.abrupt("return", {
+              key: keyBuffer,
+              iv: ivBuffer,
+              data: encryptedBuffer
+            });
+
+          case 22:
+            _context8.prev = 22;
+            _context8.t1 = _context8["catch"](15);
+            logError('Exception during encrypt AES', _context8.t1);
             return _context8.abrupt("return", null);
 
-          case 23:
+          case 26:
           case "end":
             return _context8.stop();
         }
       }
-    }, _callee8, null, [[2, 8], [12, 19]]);
+    }, _callee8, null, [[5, 11], [15, 22]]);
+  }));
+  return _encryptAES.apply(this, arguments);
+}
+
+function encryptRSA(_x4, _x5) {
+  return _encryptRSA.apply(this, arguments);
+}
+
+function _encryptRSA() {
+  _encryptRSA = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee9(pubKeyPem, dataBuffer) {
+    var pubKeyBuffer, cryptoKey;
+    return _regenerator.default.wrap(function _callee9$(_context9) {
+      while (1) {
+        switch (_context9.prev = _context9.next) {
+          case 0:
+            pubKeyBuffer = stringToArrayBuffer(atob(pemToBase64Key(pubKeyPem)));
+            cryptoKey = null;
+            _context9.prev = 2;
+            _context9.next = 5;
+            return crypto.subtle.importKey("spki", pubKeyBuffer, ASYM_ALGO, false, ["encrypt"]);
+
+          case 5:
+            cryptoKey = _context9.sent;
+            _context9.next = 12;
+            break;
+
+          case 8:
+            _context9.prev = 8;
+            _context9.t0 = _context9["catch"](2);
+            logError("Failed to import RSA pubKey", _context9.t0);
+            return _context9.abrupt("return", null);
+
+          case 12:
+            _context9.prev = 12;
+            _context9.next = 15;
+            return crypto.subtle.encrypt({
+              name: ASYM_ALGO.name,
+              hash: ASYM_ALGO.hash
+            }, cryptoKey, dataBuffer);
+
+          case 15:
+            return _context9.abrupt("return", _context9.sent);
+
+          case 18:
+            _context9.prev = 18;
+            _context9.t1 = _context9["catch"](12);
+            logError("Failed to encrypt RSA", _context9.t1);
+            return _context9.abrupt("return", null);
+
+          case 22:
+          case "end":
+            return _context9.stop();
+        }
+      }
+    }, _callee9, null, [[2, 8], [12, 18]]);
   }));
   return _encryptRSA.apply(this, arguments);
 }
@@ -1377,9 +1392,9 @@ function DidwwEncrypt(options) {
     fingerprint = null;
   };
 
-  this.encryptContent = /*#__PURE__*/function () {
-    var _ref3 = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee3(fileContent) {
-      var RsaKeys, aesKey, encryptedAes, encryptedParts;
+  this.encrypt = /*#__PURE__*/function () {
+    var _ref3 = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee3(buffer) {
+      var RsaKeys, encryptedAes, AesKeyIvBuffer, encryptedAesKeyIvBufferA, encryptedAesKeyIvBufferB, encryptedBuffer;
       return _regenerator.default.wrap(function _callee3$(_context3) {
         while (1) {
           switch (_context3.prev = _context3.next) {
@@ -1390,29 +1405,25 @@ function DidwwEncrypt(options) {
             case 2:
               RsaKeys = _context3.sent;
               _context3.next = 5;
-              return generateKey();
+              return encryptAES(buffer);
 
             case 5:
-              aesKey = _context3.sent;
-              _context3.next = 8;
-              return encryptAES(aesKey, fileContent);
-
-            case 8:
               encryptedAes = _context3.sent;
-              _context3.next = 11;
-              return encryptRSA(RsaKeys[0], encryptedAes.key);
+              AesKeyIvBuffer = concatArrayBuffers([encryptedAes.key, encryptedAes.iv]);
+              _context3.next = 9;
+              return encryptRSA(RsaKeys[0], AesKeyIvBuffer);
 
-            case 11:
-              _context3.t0 = _context3.sent;
-              _context3.next = 14;
-              return encryptRSA(RsaKeys[1], encryptedAes.key);
+            case 9:
+              encryptedAesKeyIvBufferA = _context3.sent;
+              _context3.next = 12;
+              return encryptRSA(RsaKeys[1], AesKeyIvBuffer);
 
-            case 14:
-              _context3.t1 = _context3.sent;
-              encryptedParts = [_context3.t0, _context3.t1];
-              return _context3.abrupt("return", new DidwwEncryptedFile(encryptedParts.concat(encryptedAes.content).join(SEPARATOR)));
+            case 12:
+              encryptedAesKeyIvBufferB = _context3.sent;
+              encryptedBuffer = concatArrayBuffers([encryptedAesKeyIvBufferA, encryptedAesKeyIvBufferB, encryptedAes.data]);
+              return _context3.abrupt("return", new DidwwEncryptedFile(encryptedBuffer));
 
-            case 17:
+            case 15:
             case "end":
               return _context3.stop();
           }
@@ -1420,18 +1431,36 @@ function DidwwEncrypt(options) {
       }, _callee3);
     }));
 
-    return function (_x7) {
+    return function (_x6) {
       return _ref3.apply(this, arguments);
     };
   }();
 
-  this.encryptFile = function (file) {
-    return readFileContent(file).then(_this.encryptContent);
-  };
+  this.encryptContent = /*#__PURE__*/function () {
+    var _ref4 = (0, _asyncToGenerator2.default)( /*#__PURE__*/_regenerator.default.mark(function _callee4(binaryContent) {
+      return _regenerator.default.wrap(function _callee4$(_context4) {
+        while (1) {
+          switch (_context4.prev = _context4.next) {
+            case 0:
+              return _context4.abrupt("return", _this.encrypt(stringToArrayBuffer(binaryContent)));
 
-  this.encryptArrayBuffer = function (buffer) {
-    var binary = arrayBufferToString(buffer);
-    return _this.encryptContent(binary);
+            case 1:
+            case "end":
+              return _context4.stop();
+          }
+        }
+      }, _callee4);
+    }));
+
+    return function (_x7) {
+      return _ref4.apply(this, arguments);
+    };
+  }();
+
+  this.encryptFile = function (file) {
+    return readFileContent(file).then(function (buffer) {
+      return _this.encrypt(buffer);
+    });
   };
 }
 
@@ -1442,5 +1471,5 @@ DidwwEncrypt['ASYM_ALGO'] = ASYM_ALGO; // export default DidwwEncrypt
 module.exports = DidwwEncrypt;
 },{"@babel/runtime/helpers/asyncToGenerator":"agGE","@babel/runtime/regenerator":"PMvg","./constants":"iJA9"}],"hpaf":[function(require,module,exports) {
 window.DidwwEncrypt = require('./index');
-},{"./index":"Focm"}]},{},["hpaf"], null)
+},{"./index":"Focm"}]},{},["hpaf"], null);
 //# sourceMappingURL=/browser.js.map
