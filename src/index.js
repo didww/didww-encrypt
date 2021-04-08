@@ -6,10 +6,11 @@ const {
     URLS
 } = require('./constants')
 
-function DidwwEncryptedFile(content) {
-    this.toString = () => content
-    this.toFile = (name) => buildFile(content, name || 'file.enc', 'text/plain')
-    this.toArrayBuffer = () => stringToArrayBuffer(content)
+function DidwwEncryptedFile(buffer) {
+    this.toString = () => arrayBufferToString(buffer)
+    this.toBase64String = () => btoa(arrayBufferToString(buffer))
+    this.toFile = (name) => buildFile(buffer, name || 'file.enc', 'text/plain')
+    this.toArrayBuffer = () => buffer
 }
 
 function logError(message) {
@@ -30,7 +31,7 @@ function cryptoFingerprint(text, digestAlgo) {
 }
 
 async function calculateFingerprint(pemPublicKeys) {
-    const publicKeysBase64 = pemPublicKeys.map(pemPubKey => PemToBase64Key(pemPubKey))
+    const publicKeysBase64 = pemPublicKeys.map(pemPubKey => pemToBase64Key(pemPubKey))
     return [
         await cryptoFingerprint(atob(publicKeysBase64[0]), FINGERPRINT_ALGO),
         await cryptoFingerprint(atob(publicKeysBase64[1]), FINGERPRINT_ALGO),
@@ -46,9 +47,17 @@ function stringToArrayBuffer(str) {
     return buf
 }
 
-function hexStringToArrayBuffer(hexString) {
-    let intArray = hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
-    return new Uint8Array(intArray).buffer
+function concatArrayBuffers(buffers) {
+    if (buffers.length === 1) return buffers[0];
+
+    let size = 0
+    buffers.forEach(b => size += b.byteLength)
+    const result = new Uint8Array(size)
+    buffers.forEach( (buffer, index) => {
+        const offset = index === 0 ? 0 : buffers[index - 1].byteLength
+        result.set(new Uint8Array(buffer), offset)
+    })
+    return result.buffer
 }
 
 function arrayBufferToString(buf) {
@@ -67,16 +76,16 @@ function arrayBufferToHexString(buf) {
     }, "");
 }
 
-function buildFile(content, name, type) {
+function buildFile(buffer, name, type) {
     // Edge browser does not support File
     if (window && window.navigator && window.navigator.msSaveBlob) {
-        let file = new Blob([content], { type: type });
+        let file = new Blob([buffer], { type: type });
         file.lastModifiedDate = new Date();
         file.name = name;
         return file;
     }
 
-    return new File([content], name, { type: type, lastModified: new Date() })
+    return new File([buffer], name, { type: type, lastModified: new Date() })
 }
 
 function readFileContent(file) {
@@ -84,8 +93,15 @@ function readFileContent(file) {
         let reader = new FileReader()
         reader.onload = () => resolve(reader.result)
         reader.onerror = () => reject(reader.error)
-        reader.readAsDataURL(file)
+        reader.readAsArrayBuffer(file)
     })
+}
+
+function pemToBase64Key(pubKeyPem) {
+    // pemPubKey should look like this
+    // "-----BEGIN PUBLIC KEY-----\n<pubKeyBase64>\n-----END PUBLIC KEY-----\n"
+    if (pubKeyPem[pubKeyPem.length - 1] !== "\n") pubKeyPem = pubKeyPem + "\n"
+    return pubKeyPem.split("\n").slice(1, -2).join("")
 }
 
 async function generateKey() {
@@ -94,14 +110,16 @@ async function generateKey() {
         true,
         ["encrypt", "decrypt"]
     )
-    const keyBuffer = await crypto.subtle.exportKey("raw", cryptoKey)
-    return arrayBufferToHexString(keyBuffer)
+    return await crypto.subtle.exportKey("raw", cryptoKey)
 }
 
-async function encryptAES(key, content) {
-    const keyBuffer = hexStringToArrayBuffer(key)
-    const ivBufView = crypto.getRandomValues(new Uint8Array(16))
-    const salt = '0'.repeat(16)
+function generateRandomArrayBuffer(size) {
+    return crypto.getRandomValues(new Uint8Array(size)).buffer
+}
+
+async function encryptAES(dataBuffer) {
+    const keyBuffer = await generateKey()
+    const ivBuffer = generateRandomArrayBuffer(16)
     let cryptoKey = null;
 
     try {
@@ -119,34 +137,25 @@ async function encryptAES(key, content) {
 
     try {
         const encryptedBuffer = await crypto.subtle.encrypt(
-            { name: SYM_ALGO.name, iv: ivBufView },
+            { name: SYM_ALGO.name, iv: ivBuffer },
             cryptoKey,
-            stringToArrayBuffer(content)
+            dataBuffer
         )
-        const encryptedContent = btoa(salt + arrayBufferToString(encryptedBuffer))
-        const aesKey = [key, arrayBufferToHexString(ivBufView.buffer)].join(SEPARATOR)
-        return { key: aesKey, content: encryptedContent }
+        return { key: keyBuffer, iv: ivBuffer, data: encryptedBuffer }
     } catch (e) {
         logError('Exception during encrypt AES', e)
         return null
     }
 }
 
-function PemToBase64Key(pemPubKey) {
-    // pemPubKey should look like this
-    // "-----BEGIN PUBLIC KEY-----\n<pubKeyBase64>\n-----END PUBLIC KEY-----\n"
-    if (pemPubKey[pemPubKey.length - 1] !== "\n") pemPubKey = pemPubKey + "\n"
-    return pemPubKey.split("\n").slice(1, -2).join("")
-}
-
-async function encryptRSA(pemPubKey, content) {
-    const pubKeyBase64 = PemToBase64Key(pemPubKey)
+async function encryptRSA(pubKeyPem, dataBuffer) {
+    const pubKeyBuffer = stringToArrayBuffer(atob(pemToBase64Key(pubKeyPem)))
     let cryptoKey = null;
 
     try {
         cryptoKey = await crypto.subtle.importKey(
             "spki",
-            stringToArrayBuffer(atob(pubKeyBase64)),
+            pubKeyBuffer,
             ASYM_ALGO,
             false,
             ["encrypt"]
@@ -157,15 +166,14 @@ async function encryptRSA(pemPubKey, content) {
     }
 
     try {
-        const encryptedBuffer = await crypto.subtle.encrypt(
+        return await crypto.subtle.encrypt(
             {
                 name: ASYM_ALGO.name,
                 hash: ASYM_ALGO.hash
             },
             cryptoKey,
-            stringToArrayBuffer(content)
+            dataBuffer
         )
-        return btoa(arrayBufferToString(encryptedBuffer))
     } catch (e) {
         logError("Failed to encrypt RSA", e)
         return null
@@ -206,24 +214,24 @@ function DidwwEncrypt(options) {
         publicKeys = null
         fingerprint = null
     }
-    this.encryptContent = async fileContent => {
+    this.encrypt = async buffer => {
         const RsaKeys = await this.getPublicKeys()
-        const aesKey = await generateKey()
-        const encryptedAes = await encryptAES(aesKey, fileContent)
-        const encryptedParts = [
-            await encryptRSA(RsaKeys[0], encryptedAes.key),
-            await encryptRSA(RsaKeys[1], encryptedAes.key)
-        ]
-        return new DidwwEncryptedFile(
-            encryptedParts.concat(encryptedAes.content).join(SEPARATOR)
-        )
+        const encryptedAes = await encryptAES(buffer)
+        const AesKeyIvBuffer = concatArrayBuffers([encryptedAes.key, encryptedAes.iv])
+        const encryptedAesKeyIvBufferA = await encryptRSA(RsaKeys[0], AesKeyIvBuffer)
+        const encryptedAesKeyIvBufferB = await encryptRSA(RsaKeys[1], AesKeyIvBuffer)
+        const encryptedBuffer = concatArrayBuffers([
+            encryptedAesKeyIvBufferA,
+            encryptedAesKeyIvBufferB,
+            encryptedAes.data
+        ])
+        return new DidwwEncryptedFile(encryptedBuffer)
+    }
+    this.encryptContent = async binaryContent => {
+        return this.encrypt(stringToArrayBuffer(binaryContent))
     }
     this.encryptFile = file => {
-        return readFileContent(file).then(this.encryptContent)
-    }
-    this.encryptArrayBuffer = buffer => {
-        let binary = arrayBufferToString(buffer)
-        return this.encryptContent(binary)
+        return readFileContent(file).then(buffer => this.encrypt(buffer))
     }
 }
 
