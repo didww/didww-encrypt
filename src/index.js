@@ -50,11 +50,11 @@ function stringToArrayBuffer(str) {
 function concatArrayBuffers(buffers) {
     if (buffers.length === 1) return buffers[0];
 
-    let size = 0
-    buffers.forEach(b => size += b.byteLength)
-    const result = new Uint8Array(size)
+    const buffersSizes = buffers.map(buff => buff.byteLength)
+    const totalSize = buffersSizes.reduce((a, b) => a + b, 0)
+    const result = new Uint8Array(totalSize)
     buffers.forEach( (buffer, index) => {
-        const offset = index === 0 ? 0 : buffers[index - 1].byteLength
+        const offset = buffersSizes.slice(0, index).reduce((a, b) => a + b, 0)
         result.set(new Uint8Array(buffer), offset)
     })
     return result.buffer
