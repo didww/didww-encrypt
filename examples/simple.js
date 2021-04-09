@@ -1,5 +1,4 @@
-// import DidwwEncrypt from '@didww/encrypt'
-const DidwwEncrypt = require('@didww/encrypt')
+import DidwwEncrypt from '@didww/encrypt'
 
 const encryptor = new DidwwEncrypt({
     environment: 'sandbox'

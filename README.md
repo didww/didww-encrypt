@@ -17,7 +17,7 @@ https://didww.github.io/didww-encrypt/
 ## Usage
 
 ```js
-const DidwwEncrypt = require('@didww/encrypt')
+import DidwwEncrypt from '@didww/encrypt'
 
 const encryptor = new DidwwEncrypt({
     environment: 'sandbox'

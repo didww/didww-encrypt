@@ -1,10 +1,10 @@
-const {
+import {
     SEPARATOR,
     FINGERPRINT_ALGO,
     SYM_ALGO,
     ASYM_ALGO,
     URLS
-} = require('./constants')
+} from './constants'
 
 function DidwwEncryptedFile(buffer) {
     this.toString = () => arrayBufferToString(buffer)
@@ -235,9 +235,5 @@ function DidwwEncrypt(options) {
     }
 }
 
-DidwwEncrypt['DidwwEncryptedFile'] = DidwwEncryptedFile
-DidwwEncrypt['SYM_ALGO'] = SYM_ALGO
-DidwwEncrypt['ASYM_ALGO'] = ASYM_ALGO
-
-// export default DidwwEncrypt
-module.exports = DidwwEncrypt
+export default DidwwEncrypt
+export { DidwwEncryptedFile, SYM_ALGO, ASYM_ALGO }

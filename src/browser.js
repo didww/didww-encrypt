@@ -1,1 +1,2 @@
-window.DidwwEncrypt = require('./index')
+import DidwwEncrypt from './index'
+window.DidwwEncrypt = DidwwEncrypt

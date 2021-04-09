@@ -941,18 +941,31 @@ module.exports = {
 },{}],"Focm":[function(require,module,exports) {
 "use strict";
 
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.DidwwEncryptedFile = DidwwEncryptedFile;
+Object.defineProperty(exports, "SYM_ALGO", {
+  enumerable: true,
+  get: function () {
+    return _constants.SYM_ALGO;
+  }
+});
+Object.defineProperty(exports, "ASYM_ALGO", {
+  enumerable: true,
+  get: function () {
+    return _constants.ASYM_ALGO;
+  }
+});
+exports.default = void 0;
+
 var _asyncToGenerator2 = _interopRequireDefault(require("@babel/runtime/helpers/asyncToGenerator"));
 
 var _regenerator = _interopRequireDefault(require("@babel/runtime/regenerator"));
 
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var _constants = require("./constants");
 
-var _require = require('./constants'),
-    SEPARATOR = _require.SEPARATOR,
-    FINGERPRINT_ALGO = _require.FINGERPRINT_ALGO,
-    SYM_ALGO = _require.SYM_ALGO,
-    ASYM_ALGO = _require.ASYM_ALGO,
-    URLS = _require.URLS;
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function DidwwEncryptedFile(buffer) {
   this.toString = function () {
@@ -1034,16 +1047,16 @@ function _calculateFingerprint() {
               return pemToBase64Key(pemPubKey);
             });
             _context6.next = 3;
-            return cryptoFingerprint(atob(publicKeysBase64[0]), FINGERPRINT_ALGO);
+            return cryptoFingerprint(atob(publicKeysBase64[0]), _constants.FINGERPRINT_ALGO);
 
           case 3:
             _context6.t0 = _context6.sent;
             _context6.next = 6;
-            return cryptoFingerprint(atob(publicKeysBase64[1]), FINGERPRINT_ALGO);
+            return cryptoFingerprint(atob(publicKeysBase64[1]), _constants.FINGERPRINT_ALGO);
 
           case 6:
             _context6.t1 = _context6.sent;
-            return _context6.abrupt("return", [_context6.t0, _context6.t1].join(SEPARATOR));
+            return _context6.abrupt("return", [_context6.t0, _context6.t1].join(_constants.SEPARATOR));
 
           case 8:
           case "end":
@@ -1068,13 +1081,17 @@ function stringToArrayBuffer(str) {
 
 function concatArrayBuffers(buffers) {
   if (buffers.length === 1) return buffers[0];
-  var size = 0;
-  buffers.forEach(function (b) {
-    return size += b.byteLength;
+  var buffersSizes = buffers.map(function (buff) {
+    return buff.byteLength;
   });
-  var result = new Uint8Array(size);
+  var totalSize = buffersSizes.reduce(function (a, b) {
+    return a + b;
+  }, 0);
+  var result = new Uint8Array(totalSize);
   buffers.forEach(function (buffer, index) {
-    var offset = index === 0 ? 0 : buffers[index - 1].byteLength;
+    var offset = buffersSizes.slice(0, index).reduce(function (a, b) {
+      return a + b;
+    }, 0);
     result.set(new Uint8Array(buffer), offset);
   });
   return result.buffer;
@@ -1152,7 +1169,7 @@ function _generateKey() {
         switch (_context7.prev = _context7.next) {
           case 0:
             _context7.next = 2;
-            return crypto.subtle.generateKey(SYM_ALGO, true, ["encrypt", "decrypt"]);
+            return crypto.subtle.generateKey(_constants.SYM_ALGO, true, ["encrypt", "decrypt"]);
 
           case 2:
             cryptoKey = _context7.sent;
@@ -1197,7 +1214,7 @@ function _encryptAES() {
             _context8.prev = 5;
             _context8.next = 8;
             return crypto.subtle.importKey("raw", keyBuffer, {
-              name: SYM_ALGO.name
+              name: _constants.SYM_ALGO.name
             }, false, ["encrypt", "decrypt"]);
 
           case 8:
@@ -1215,7 +1232,7 @@ function _encryptAES() {
             _context8.prev = 15;
             _context8.next = 18;
             return crypto.subtle.encrypt({
-              name: SYM_ALGO.name,
+              name: _constants.SYM_ALGO.name,
               iv: ivBuffer
             }, cryptoKey, dataBuffer);
 
@@ -1258,7 +1275,7 @@ function _encryptRSA() {
             cryptoKey = null;
             _context9.prev = 2;
             _context9.next = 5;
-            return crypto.subtle.importKey("spki", pubKeyBuffer, ASYM_ALGO, false, ["encrypt"]);
+            return crypto.subtle.importKey("spki", pubKeyBuffer, _constants.ASYM_ALGO, false, ["encrypt"]);
 
           case 5:
             cryptoKey = _context9.sent;
@@ -1275,8 +1292,8 @@ function _encryptRSA() {
             _context9.prev = 12;
             _context9.next = 15;
             return crypto.subtle.encrypt({
-              name: ASYM_ALGO.name,
-              hash: ASYM_ALGO.hash
+              name: _constants.ASYM_ALGO.name,
+              hash: _constants.ASYM_ALGO.hash
             }, cryptoKey, dataBuffer);
 
           case 15:
@@ -1303,7 +1320,7 @@ function DidwwEncrypt(options) {
 
   if (!options) options = {};
   var environment = options.environment || 'sandbox';
-  var publicKeysUrl = options.url || URLS[environment];
+  var publicKeysUrl = options.url || _constants.URLS[environment];
   var publicKeys = null;
   var testPublicKeys = null;
   var fingerprint = null;
@@ -1464,12 +1481,15 @@ function DidwwEncrypt(options) {
   };
 }
 
-DidwwEncrypt['DidwwEncryptedFile'] = DidwwEncryptedFile;
-DidwwEncrypt['SYM_ALGO'] = SYM_ALGO;
-DidwwEncrypt['ASYM_ALGO'] = ASYM_ALGO; // export default DidwwEncrypt
-
-module.exports = DidwwEncrypt;
+var _default = DidwwEncrypt;
+exports.default = _default;
 },{"@babel/runtime/helpers/asyncToGenerator":"agGE","@babel/runtime/regenerator":"PMvg","./constants":"iJA9"}],"hpaf":[function(require,module,exports) {
-window.DidwwEncrypt = require('./index');
-},{"./index":"Focm"}]},{},["hpaf"], null);
+"use strict";
+
+var _index = _interopRequireDefault(require("./index"));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+window.DidwwEncrypt = _index.default;
+},{"./index":"Focm"}]},{},["hpaf"], null)
 //# sourceMappingURL=/browser.js.map
