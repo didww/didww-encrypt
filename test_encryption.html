@@ -127,7 +127,7 @@
         integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
         crossorigin="anonymous"
 ></script>
-<script src="https://unpkg.com/@didww/encrypt@1.3.0/dist/browser.min.js"></script>
+<script src="https://unpkg.com/@didww/encrypt@1.5.3/dist/browser.min.js"></script>
 <script>
     function readFile(file, onLoad, onError) {
         if (!onError) onError = function (error) {
@@ -141,72 +141,35 @@
         reader.onerror = function () {
             onError(reader.error)
         }
-        reader.readAsDataURL(file)
+        reader.readAsArrayBuffer(file)
         return reader
     }
 
-    function dataURItoBinary(dataURI) {
-        return atob(dataURI.split(',')[1])
-    }
-
-    function dataURItoBuffer(dataURI) {
-        const byteString = dataURItoBinary(dataURI)
-        let ab = new ArrayBuffer(byteString.length)
-        let ia = new Uint8Array(ab)
-        for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i)
-        }
-        return ab
-    }
-
-    function dataURItoMimeString(dataURI) {
-        return dataURI.split(',')[0].split(':')[1].split(';')[0]
-    }
-
     function buildDownloadLink(file, filename) {
-        const blobUrl = URL.createObjectURL(file)
-        return $('<a>', { download: filename, href: blobUrl })
-            .text('Download ' + filename)
-            .css({ display: 'block' })
-    }
-
-    function generateRSAKey() {
-        return crypto.subtle.generateKey(
-            {
-                name: "RSA-OAEP",
-                modulusLength: 4096,
-                publicExponent: new Uint8Array([1, 0, 1]),
-                extractable: false,
-                hash: {
-                    name: "SHA-256"
-                }
-            },
-            true,
-            ["encrypt", "decrypt"]
-        )
-    }
-
-    function convertBinaryToPem(binaryData, label) {
-        const base64Cert = btoa(arrayBufferToString(binaryData))
-        let pemCert = "-----BEGIN " + label + "-----\r\n"
-        let nextIndex = 0
-        while (nextIndex < base64Cert.length) {
-            if (nextIndex + 64 <= base64Cert.length) {
-                pemCert += base64Cert.substr(nextIndex, 64) + "\r\n"
-            } else {
-                pemCert += base64Cert.substr(nextIndex) + "\r\n"
-            }
-            nextIndex += 64
+        try {
+            const blobUrl = URL.createObjectURL(file)
+            return $('<a>', { download: filename, href: blobUrl })
+                .text('Download ' + filename)
+                .css({ display: 'block' })
+        } catch (e) {
+            console.error(e)
+            return $('<span>')
+                .text(e.toString())
+                .css({ display: 'block', color: 'red' })
         }
-        pemCert += "-----END " + label + "-----\r\n"
-        return pemCert
     }
 
-    function cryptoKeyToPublicPemKey(publicKey) {
-        return window.crypto.subtle.exportKey('spki', publicKey)
-            .then(function (spki) {
-                return convertBinaryToPem(spki, "RSA PUBLIC KEY")
-            })
+    function convertPemToArrayBuffer(keyPem) {
+        keyPem = keyPem.replace(/\r/g, '')
+        if (keyPem[keyPem.length - 1] !== "\n") keyPem = keyPem + "\n"
+        let keyBase64 = keyPem.split("\n").slice(1, -2).join("")
+        return stringToArrayBuffer(atob(keyBase64))
+    }
+
+    function pemToCryptoPrivateKey(privatePem) {
+        const algo = { name: 'RSA-OAEP', hash: 'SHA-256' }
+        const privateKeyBuf = convertPemToArrayBuffer(privatePem)
+        return crypto.subtle.importKey('pkcs8', privateKeyBuf, algo, true, ['decrypt'])
     }
 
     function stringToArrayBuffer(str) {
@@ -225,24 +188,11 @@
         }, "");
     }
 
-    function hexStringToArrayBuffer(hexString) {
-        var hexArray = hexString.match(/.{1,2}/g);
-        var intArray = hexArray.map(function (byte) {
-            return parseInt(byte, 16);
-        });
-        return new Uint8Array(intArray).buffer;
-    }
-
     function decryptRSA(privateKey, content) {
-        return crypto.subtle.decrypt(
-            {
-                name: "RSA-OAEP",
-                label: new Uint8Array([])
-            },
-            privateKey,
-            stringToArrayBuffer(atob(content))
-        ).then(function (decryptedBuf) {
-            return arrayBufferToString(decryptedBuf);
+        const algo = { name: "RSA-OAEP", label: new Uint8Array([]) }
+        const contentBuf = stringToArrayBuffer(content)
+        return crypto.subtle.decrypt(algo, privateKey, contentBuf).then(function (decryptedBuf) {
+            return arrayBufferToString(decryptedBuf)
         }).catch(function (error) {
             console.error('decryptRSA')
             console.error(error)
@@ -251,36 +201,28 @@
     }
 
     const buildFile = (content, name, type) => {
+        const contentBuf = stringToArrayBuffer(content)
+        if (!type) type = 'application/octet-stream'
         // Edge browser does not support File
         if (window && window.navigator && window.navigator.msSaveBlob) {
-            let file = new Blob([content], { type: type });
+            let file = new Blob([contentBuf], { type: type });
             file.lastModifiedDate = new Date();
             file.name = name;
             return file;
         }
 
-        return new File([content], name, { type: type, lastModified: new Date() })
+        return new File([contentBuf], name, { type: type, lastModified: new Date() })
     }
 
     function decryptAES(key, iv, content) {
-        const keyBuffer = hexStringToArrayBuffer(key)
-        const ivBuffer = hexStringToArrayBuffer(iv)
-        // first 16 bytes is salt.
-        const encryptedText = stringToArrayBuffer(atob(content)).slice(16)
-
-        return crypto.subtle.importKey(
-            "raw",
-            keyBuffer,
-            { name: "AES-CBC" },
-            false,
-            ["encrypt", "decrypt"]
-        ).then(function (cryptoKey) {
-            return crypto.subtle.decrypt(
-                { name: "AES-CBC", iv: ivBuffer },
-                cryptoKey,
-                encryptedText
-            ).then(function (decryptedBuf) {
-                return arrayBufferToString(decryptedBuf);
+        const algo = { name: "AES-CBC" }
+        const rules = ["encrypt", "decrypt"]
+        const keyBuf = stringToArrayBuffer(key)
+        return crypto.subtle.importKey("raw", keyBuf, algo, false, rules).then(function (cryptoKey) {
+            const decAlgo = { name: "AES-CBC", iv: stringToArrayBuffer(iv) }
+            const contentBuf = stringToArrayBuffer(content)
+            return crypto.subtle.decrypt(decAlgo, cryptoKey, contentBuf).then(function (decryptedBuf) {
+                return arrayBufferToString(decryptedBuf)
             })
         }).catch(function (error) {
             console.error('decryptAES')
@@ -289,45 +231,156 @@
         })
     }
 
-    function decryptFile(binary) {
-        const fileParts = binary.split(':::')
-        const encryptedAesKey = fileParts[0]
-        const encryptedContent = fileParts[2]
-        return decryptRSA(cryptoKeyA.privateKey, encryptedAesKey).then(function (aesKey) {
-            const aesKeyParts = aesKey.split(':::')
-            const key = aesKeyParts[0]
-            const iv = aesKeyParts[1]
+    // index can be 0 or 1 - first or second encrypted credentials
+    function decryptFile(binary, privateKey, index) {
+        const encryptedAesCredentialsA = binary.substring(0, 512)
+        const encryptedAesCredentialsB = binary.substring(512, 1024)
+        const encryptedAesCredentials = index === 0 ? encryptedAesCredentialsA : encryptedAesCredentialsB
+        const encryptedContent = binary.substring(1024)
+        return decryptRSA(privateKey, encryptedAesCredentials).then(function (aesCredentials) {
+            const key = aesCredentials.substring(0, 32)
+            const iv = aesCredentials.substring(32)
             return decryptAES(key, iv, encryptedContent)
-        }).then(function (decryptedDataUrl) {
-            const mimeString = dataURItoMimeString(decryptedDataUrl)
-            const decryptedBuffer = dataURItoBuffer(decryptedDataUrl)
-            return fetch('https://cdn.jsdelivr.net/gh/jshttp/mime-db@master/db.json')
-                .then(function(resp){
-                    return resp.json()
-                }).then(function (json) {
-                    let filename = 'decrypted'
-                    if (json && json[mimeString]) filename = 'decrypted.' + json[mimeString].extensions[0]
-                    // console.log(json, json[mimeString].extensions[0])
-                    return buildFile(decryptedBuffer, filename, mimeString)
-                })
+        }).then(function (decryptedBinary) {
+            return buildFile(decryptedBinary, 'decrypted')
         })
     }
 
-    function buildEncryptor() {
-        if (encryptor) return
-        if (!publicKeyAInput.val() || !publicKeyBInput.val()) return
+    const privateKeyPemA = "-----BEGIN RSA PRIVATE KEY-----\n" +
+        "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\n" +
+        "n0qQ81lEeaNVwwo7WXOEiEx1oJ0I\n" +
+        "-----END RSA PRIVATE KEY-----\n"
+    const publicKeyPemA = "-----BEGIN RSA PUBLIC KEY-----\n" +
+        "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA2El7z+KPrK5Az2H4MW3S\n" +
+        "GF8DL9JXTpawQYxo5hvap0GXnwDuAPJQKAaXawU4U40Vrt++bPYaysAdgnwIKKBG\n" +
+        "HW588aPcrRcWQI2fPf/BaGDjEJy4tdA11vq9+SWsBw6VSZ8U0UGkxG9EyWLm1iQ1\n" +
+        "zAt5hl8vGsQZfvu7PNP34ettEh1KyR8lM31INZelWnE/BiI+EHSuYWgVIg6Vtzmk\n" +
+        "CCPCSWRoOYFtna1EfR6e9xoE+G4Fwx/jK6RRTgL9ROBW5fUBaLpEiY4bj4z5GcoW\n" +
+        "z6FklAXt5rBk6XQh4fmqczZpPhGeRXzvnO0JicK0PwkjhPhc6WfK4NnhLjH/xII4\n" +
+        "E2hqVBR8nXe32GTggQOlOF0ggfE2k3xKlRDgCV33ZHP9hnXwekrAnD42vmYuzNiC\n" +
+        "n8X/T+vnw8z7HDMO11RNkKdSHYzE2kdBwYIrWpyzt+fFaTGUfoWa3B7Xxziq+LjG\n" +
+        "sPTWhyO3L8440vZS1/MgOG3ljacj1dqy0aZxoEIZD+iAzGXaanQRl6i7qWSLQUoh\n" +
+        "8FKk2dDMxETzLaUq2R2LHFE6SA91vVL47rDFeDzJ5+zlSQh4DrYY+8OTe0TEAN4A\n" +
+        "twW5ogLvVItuLOlTwy6aGKHtPWOhECCj1pMKsBhnBq03Qwb5HY0vnMdH/03u/6l9\n" +
+        "WewlmAqABGMnkU1agd3tCl8CAwEAAQ==\n" +
+        "-----END RSA PUBLIC KEY-----\n"
+    const privateKeyPemB = "-----BEGIN RSA PRIVATE KEY-----\n" +
+        "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\n" +
+        "QNNgyrVbeTyHTwzf/EbyWneRRyK0kZo=\n" +
+        "-----END RSA PRIVATE KEY-----\n"
+    const publicKeyPemB = "-----BEGIN RSA PUBLIC KEY-----\n" +
+        "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA0d/ef0k/Y/e8iyM0hW+u\n" +
+        "fgd6QpKRI9deTqii8Mwc8qfnzuwbrvRBMDQ89wHY23UFPbWERV5Pw9S5Opdwet6r\n" +
+        "hFiCGzRmixElu0DZVLctp8jeWYvV9wHtaKnXSMHG0j3OJ5nStuGP2/SGIz1uGphB\n" +
+        "1BWZKX24SEQlpJBOGY3epRsO3ABsKxiOOnMdOansZ/4tLIsLnk1Jhi3OXMOPMIzB\n" +
+        "+iIjmbfDZtW6wduR1vzk04eGcrTcXgbTkJm9RPXrnC18L+qa2dv1r9gr4SG0X7tG\n" +
+        "bglzK+ZoYqAk87644sPNCSMU/UGMdlGuVmb+y1i0r7GPNDzr9kRAMttpYVaTeMFi\n" +
+        "bfoEELuWReHlBmDlqnHdvznGo79Q+qS6XO9Q14Jf4EYiSY4RQ9RBup4J7BKJXOeb\n" +
+        "gIuOReyg+FRVDTsjuoifsCxOXHwrJlhIry6CN1cdiItMLl+9PM5Ybr59tB3H4kfd\n" +
+        "KtT3hHi77jBcvyCoj4UPYqqYx0tWROLqw5vi1qPByC/tp8b4JmTrJYKYx7u00Tr7\n" +
+        "emFSEHeT2qHzH2/J0W5BWYN0eLZBJ16+XY55kX/R6JewwUY2aLLNFT33+mh/iNqN\n" +
+        "8lYSRsV7jDK0l4Ta3I1P215SoIubRVAqveAS4sNjKvLAWXvKYBrs80lo6x3dgwlm\n" +
+        "gtm35+NPfdL6CJJWdsAsANECAwEAAQ==\n" +
+        "-----END RSA PUBLIC KEY-----\n"
 
-        encryptor = new DidwwEncrypt({
-            environment: 'test',
-            publicKeys: [publicKeyAInput.val(), publicKeyBInput.val()]
-        })
-        encryptor.getFingerprint().then(function (fingerprint) {
-            fingerprintInput.val(fingerprint)
-        })
-    }
-
-    const fileInput = $('#encrypt-file')
-    const fileToDecryptInput = $('#decrypt-file')
+    const encryptFileInput = $('#encrypt-file')
+    const decryptFileInput = $('#decrypt-file')
     const fingerprintInput = $('#encryption-fingerprint')
     const downloadLinksContainer = $('#encrypted-download-link')
     const decryptedContainer = $('#decrypted-download-link')
@@ -335,32 +388,101 @@
     const publicKeyAInput = $('#public-key-a')
     const publicKeyBInput = $('#public-key-b')
 
-    let fileReader = null
-    let encryptor = null
-    let cryptoKeyA = null
-    let cryptoKeyB = null
+    let cryptoPrivateKeyA = null
+    let cryptoPrivateKeyB = null
+    let encryptReader = null
     let decryptReader = null
 
-    // Chromium has issues with importing RSA private keys from PEM,
-    // so we generate private keys during page load.
-    generateRSAKey().then(function (value) {
-        cryptoKeyA = value
-        cryptoKeyToPublicPemKey(cryptoKeyA.publicKey).then(function (pem) {
-            publicKeyAInput.val(pem)
-            buildEncryptor()
-        })
+    // function generateRSAKey() {
+    //     return crypto.subtle.generateKey(
+    //         {
+    //             name: "RSA-OAEP",
+    //             modulusLength: 4096,
+    //             publicExponent: new Uint8Array([1, 0, 1]),
+    //             extractable: true,
+    //             hash: {
+    //                 name: "SHA-256"
+    //             }
+    //         },
+    //         true,
+    //         ["encrypt", "decrypt"]
+    //     )
+    // }
+    //
+    // function cryptoPrivateKeyToPem(privateKey) {
+    //     return crypto.subtle.exportKey('pkcs8', privateKey).then(function (privateKeyBuf) {
+    //         const privatePem = convertArrayBufferToPem(privateKeyBuf, 'RSA PRIVATE KEY')
+    //         return privatePem
+    //     })
+    // }
+    //
+    // function cryptoPublicKeyToPem(publicKey) {
+    //     return window.crypto.subtle.exportKey('spki', publicKey)
+    //         .then(function (spki) {
+    //             return convertArrayBufferToPem(spki, "RSA PUBLIC KEY")
+    //         })
+    // }
+    //
+    // function convertArrayBufferToPem(buf, label) {
+    //     const base64Cert = btoa(arrayBufferToString(buf))
+    //     let pemCert = "-----BEGIN " + label + "-----\r\n"
+    //     let nextIndex = 0
+    //     while (nextIndex < base64Cert.length) {
+    //         if (nextIndex + 64 <= base64Cert.length) {
+    //             pemCert += base64Cert.substr(nextIndex, 64) + "\r\n"
+    //         } else {
+    //             pemCert += base64Cert.substr(nextIndex) + "\r\n"
+    //         }
+    //         nextIndex += 64
+    //     }
+    //     pemCert += "-----END " + label + "-----\r\n"
+    //     return pemCert
+    // }
+    //
+    // function pemToCryptoPublicKey(publicPem) {
+    //     const algo = { name: 'RSA-OAEP', hash: 'SHA-256' }
+    //     const publicKeyBuf = convertPemToArrayBuffer(publicPem)
+    //     return crypto.subtle.importKey('pkcs8', publicKeyBuf, algo, true, ['encrypt'])
+    // }
+    //
+    // generateRSAKey().then(function (value) {
+    //     cryptoPublicKeyToPem(value.publicKey).then(function (pem) {
+    //         publicKeyPemA = pem
+    //     })
+    //     cryptoPrivateKeyToPem(value.privateKey).then(function (pem) {
+    //         privateKeyPemA = pem
+    //     })
+    // })
+    // generateRSAKey().then(function (value) {
+    //     cryptoPublicKeyToPem(value.publicKey).then(function (pem) {
+    //         publicKeyPemB = pem
+    //     })
+    //     cryptoPrivateKeyToPem(value.privateKey).then(function (pem) {
+    //         privateKeyPemB = pem
+    //     })
+    // })
+
+    const encryptor = new DidwwEncrypt({
+        environment: 'test',
+        publicKeys: [publicKeyPemA, publicKeyPemB]
     })
-    generateRSAKey().then(function (value) {
-        cryptoKeyB = value
-        cryptoKeyToPublicPemKey(cryptoKeyB.publicKey).then(function (pem) {
-            publicKeyBInput.val(pem)
-            buildEncryptor()
-        })
+    encryptor.getFingerprint().then(function (fingerprint) {
+        fingerprintInput.val(fingerprint)
     })
 
-    fileInput.on('change', function () {
+    publicKeyAInput.val(publicKeyPemA)
+    publicKeyBInput.val(publicKeyPemB)
+
+    pemToCryptoPrivateKey(privateKeyPemA).then(function (privateKeyA) {
+        cryptoPrivateKeyA = privateKeyA
+    })
+    pemToCryptoPrivateKey(privateKeyPemB).then(function (privateKeyB) {
+        cryptoPrivateKeyB = privateKeyB
+    })
+
+    encryptFileInput.on('change', function () {
         downloadLinksContainer.html('')
-        const file = fileInput[0].files[0]
+        const file = encryptFileInput[0].files[0]
 
         if (!file) {
             statusNode.text('Empty')
@@ -368,8 +490,9 @@
         }
 
         statusNode.text('Encrypting...')
-        if (fileReader) fileReader.abort()
-        fileReader = readFile(file, function (binary) {
+        if (encryptReader) encryptReader.abort()
+        encryptReader = readFile(file, function (binaryBuf) {
+            const binary = arrayBufferToString(binaryBuf)
             encryptor.encryptContent(binary).then(function (encrypted) {
                 const encryptedFile = encrypted.toFile()
                 const link = buildDownloadLink(encryptedFile, file.name + '.testenc')
@@ -379,16 +502,25 @@
         })
     })
 
-    fileToDecryptInput.on('change', function () {
+    decryptFileInput.on('change', function () {
         decryptedContainer.html('')
 
         if (decryptReader) decryptReader.abort()
 
-        const file = fileToDecryptInput[0].files[0]
-        decryptReader = readFile(file, function (dataUrl) {
-            const binary = dataURItoBinary(dataUrl)
-            decryptFile(binary).then(function (decryptedFile) {
-                const link = buildDownloadLink(decryptedFile, decryptedFile.name)
+        const file = decryptFileInput[0].files[0]
+        if (!file) {
+            decryptedContainer.text('Empty')
+            return
+        }
+
+        decryptReader = readFile(file, function (binaryBuf) {
+            const binary = arrayBufferToString(binaryBuf)
+            decryptFile(binary, cryptoPrivateKeyA, 0).then(function (decryptedFile) {
+                const link = buildDownloadLink(decryptedFile, decryptedFile.name + '_by_key_a')
+                decryptedContainer.append(link)
+            })
+            decryptFile(binary, cryptoPrivateKeyB, 1).then(function (decryptedFile) {
+                const link = buildDownloadLink(decryptedFile, decryptedFile.name + '_by_key_b')
                 decryptedContainer.append(link)
             })
         })
