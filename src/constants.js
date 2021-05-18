@@ -9,7 +9,7 @@ const ASYM_ALGO = {
 }
 const URLS = {
     production: 'https://api.didww.com/v3/public_keys',
-    sandbox: 'https://api-sandbox.didww.com/v3/public_keys'
+    sandbox: 'https://sandbox-api.didww.com/v3/public_keys'
 }
 
 module.exports = {
