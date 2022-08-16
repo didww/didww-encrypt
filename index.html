@@ -32,6 +32,17 @@
     <div class="card-header">Encrypt file</div>
     <div class="card-body">
         <div class="form-group row">
+            <label class="control-label col-md-2" for="public-key-url">Public Key URL</label>
+            <input
+                    type="text"
+                    required
+                    id="public-key-url"
+                    class="form-control col-md-8"
+                    value="https://sandbox-api.didww.com/v3/public_keys"
+            >
+        </div>
+
+        <div class="form-group row">
             <label class="control-label col-md-2" for="encryption-fingerprint">Fingerprint</label>
             <input
                     type="text"
@@ -122,18 +133,31 @@
     }
 
     const fileInput = $('#encrypt-file')
+    const publicKeyUrlInput = $('#public-key-url')
     const fingerprintInput = $('#encryption-fingerprint')
     const downloadLinksContainer = $('#encrypted-download-link')
     const statusNode = $('#encrypt-file-status')
     const copyFingerprintBtn = $('#encryption-fingerprint-copy-btn')
     const clearFilesBtn = $('#encrypt-file-clear-btn')
     let fileReaders = []
-    const encryptor = new DidwwEncrypt({
-        url: 'https://staging-api.didww.com/v3/public_keys'
+    let encryptor = new DidwwEncrypt({
+        url: publicKeyUrlInput.val()
     })
 
     encryptor.getFingerprint().then(function (fingerprint) {
         fingerprintInput.val(fingerprint)
+    })
+
+    publicKeyUrlInput.on('change', function () {
+      fingerprintInput.val('')
+      encryptor = new DidwwEncrypt({
+        url: publicKeyUrlInput.val()
+      })
+      encryptor.getFingerprint().then(function (fingerprint) {
+        fingerprintInput.val(fingerprint)
+      })
+
+      fileInput.trigger('change')
     })
 
     fileInput.on('change', function () {
