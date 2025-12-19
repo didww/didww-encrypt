@@ -19,7 +19,7 @@
     <div class="collapse navbar-collapse" id="navbarSupportedContent">
         <ul class="navbar-nav mr-auto">
             <li class="nav-item active">
-                <a class="nav-link" href="">Encrypt file</a>
+                <a class="nav-link" href="/didww-encrypt">Encrypt file</a>
             </li>
             <li class="nav-item">
                 <a class="nav-link" href="/didww-encrypt/test_encryption">Test Encryption</a>
@@ -35,6 +35,7 @@
             <label class="control-label col-md-2" for="public-key-url">Public Key URL</label>
             <input
                     type="text"
+                    autoComplete="off"
                     required
                     id="public-key-url"
                     class="form-control col-md-8"
@@ -46,6 +47,7 @@
             <label class="control-label col-md-2" for="encryption-fingerprint">Fingerprint</label>
             <input
                     type="text"
+                    autoComplete="off"
                     readonly
                     id="encryption-fingerprint"
                     class="form-control col-md-8 mr-2"
@@ -93,7 +95,7 @@
         integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
         crossorigin="anonymous"
 ></script>
-<script src="https://unpkg.com/@didww/encrypt@1.3.0/dist/browser.min.js"></script>
+<script src="https://unpkg.com/@didww/encrypt@1.5.3/dist/browser.min.js"></script>
 <script>
     function readFile(file, onLoad, onError) {
         if (!onError) onError = function (error) {
@@ -101,13 +103,19 @@
         }
 
         const reader = new FileReader()
-        reader.onload = function () {
-            onLoad(reader.result)
+        reader.onload = function (e) {
+            const arrayBuffer = e.target?.result
+            if (!arrayBuffer) {
+                onError(new Error('Failed to read file'))
+                return
+            }
+            onLoad(arrayBuffer)
         }
         reader.onerror = function () {
+            reader.abort()
             onError(reader.error)
         }
-        reader.readAsDataURL(file)
+        reader.readAsArrayBuffer(file)
         return reader
     }
 
@@ -120,7 +128,7 @@
     }
 
     function abortReaders(readers) {
-        fileReaders.forEach(function (reader) {
+        readers.forEach(function (reader) {
             if (reader.readyState !== FileReader.DONE) reader.abort()
         })
     }
@@ -149,15 +157,15 @@
     })
 
     publicKeyUrlInput.on('change', function () {
-      fingerprintInput.val('')
-      encryptor = new DidwwEncrypt({
-        url: publicKeyUrlInput.val()
-      })
-      encryptor.getFingerprint().then(function (fingerprint) {
-        fingerprintInput.val(fingerprint)
-      })
+        fingerprintInput.val('')
+        encryptor = new DidwwEncrypt({
+            url: publicKeyUrlInput.val()
+        })
+        encryptor.getFingerprint().then(function (fingerprint) {
+            fingerprintInput.val(fingerprint)
+        })
 
-      fileInput.trigger('change')
+        fileInput.trigger('change')
     })
 
     fileInput.on('change', function () {
@@ -173,10 +181,11 @@
         abortReaders(fileReaders)
         fileReaders = []
         Array.from(fileInput[0].files).forEach(function (file) {
-            const reader = readFile(file, function (binary) {
-                encryptor.encryptContent(binary).then(function (encrypted) {
-                    const encryptedFile = encrypted.toFile()
-                    const link = buildDownloadLink(encryptedFile, file.name + '.enc')
+            const reader = readFile(file, function (buffer) {
+                encryptor.encrypt(buffer).then(function (encrypted) {
+                    let encFileName = file.name + '.enc'
+                    const encryptedFile = encrypted.toFile(encFileName)
+                    const link = buildDownloadLink(encryptedFile, encFileName)
                     downloadLinksContainer.append(link)
                     if (isReadersReady(fileReaders)) statusNode.text('Encrypted.')
                 })
